@@ -76,8 +76,20 @@ def compute_and_plot_fits(x, y, name):
 
 
 def quadratic_ransac_fit(x, y, name):
+    # need to use a constrained parabola OR a decaying exponential
+    # RANSACRegressor takes a model that implements fit(X, y) and score(X, y)
+    # need to define one of those models
+    # - exponential - just fit (x, log(y))
+    # - constrained parabola - from scipy.optimize import curve_fit
+    #   would probably have to implement ransac myself for that to work...
+
+    transform_func, transform_ifunc = np.log, np.exp
+    # transform_func, transform_ifunc = lambda x: x, lambda x: x
+
+    y_log = transform_func(y)
+
     x_ = x.reshape((-1, 1))
-    y_ = y.reshape((-1, 1))
+    y_ = y_log.reshape((-1, 1))
 
     xi = np.linspace(min(x), max(x), 100).reshape((-1, 1))
 
@@ -87,13 +99,16 @@ def quadratic_ransac_fit(x, y, name):
 
     m = linear_model.RANSACRegressor(linear_model.LinearRegression())
     m.fit(x_2, y_)
-    yi = m.predict(xi_2)
+    yi_log = m.predict(xi_2)
     c = m.estimator_.coef_
-    yi_b = np.dot(c, xi_2.T).T
+    yi_log_b = np.dot(c, xi_2.T).T
 
     # the coefficients dont include the x^0 term for some reason??
-    c_b = np.array([float(yi[3][0] - yi_b[0]), c[0, 1], c[0, 2]])
-    yi_b = np.dot(c_b, xi_2.T).T
+    c_b = np.array([float(yi_log[3][0] - yi_log_b[0]), c[0, 1], c[0, 2]])
+    yi_log_b = np.dot(c_b, xi_2.T).T
+
+    yi = transform_ifunc(yi_log)
+    yi_b = transform_ifunc(yi_log_b)
 
     inlier_mask = m.inlier_mask_
     outlier_mask = np.logical_not(inlier_mask)
